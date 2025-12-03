@@ -3,14 +3,173 @@
 	<properties>
 		<title>Library Workflow Core</title>
 	</properties>
+	<head>
+        	<meta name="keywords" content="workflow, process, automation, task, action"/>
+    	</head>
 	<body>
 		<section name="Library Workflow Core">
 			<subsection name="Introduction">
 				<p>
 					This library simplify the access to the data of the workflow.
-					It provides the workflow services, using the workflowBeans.
+					It centralizes  workflow services through  workflowBeans.
 				</p>
 			</subsection>
+			<subsection name="Configuration">
+			<p>Inject the workflowBeanService corresponding to the adequate ressource workflow</p>
+			
+<pre><![CDATA[
+ <bean id="identityimport.batchWFBean.wfbeanservice" class="fr.paris.lutece.plugins.identityimport.wf.WorkflowBeanService">
+         <constructor-arg index="0" value="IDENTITYIMPORT_BATCH_RESOURCE" />
+         <constructor-arg index="1" type="int"> <value>1 </value> </constructor-arg>   <!-- : the worlkflow ID (key) -->
+ </bean>
+]]></pre>
+			</subsection>
+			
+			
+			<subsection name="Usage">
+			<p>Template integration : the workflowBean is a resource wrapper thats provides the state and the available actions for the resource : </p>
+			<p>(Example with a "Batch" class)</p>
+
+<pre><![CDATA[
+ <@box>
+     <@boxHeader title='Workflow' />
+         <@boxBody>
+        
+         <!-- affichage du statut -->
+        statut :  <#if batchWFBean.state??> <@tag  color='warning'>${batchWFBean.state.name} </@tag> <#else> not set </#if>
+        
+         <!-- affichage des actions ->>
+         <#if batchWFBean.actions??>actions :
+         <#list batchWFBean.actions as action >
+             <@aButton href="jsp/admin/plugins/identityimport/ManageBatchs.jsp?action=processAction&id_action=${action.id}&id=${batchWFBean.resource.id}"
+                        title="${action.name}" alt="${action.name}"  size='md' />
+             <!--  img src="image?resource_type=workflow_icon_img&id=${action.icon.id}" -->
+              </a>
+         </#list>
+         <#else>no action
+         </#if>
+        
+         <!-- affichage historique ressource -->
+        History : ${batchWFBean.history! }
+
+     </@boxBody>
+ </@box>
+]]></pre>
+
+		<p>JSPBean integration : the workflowBean can be created with  _wfBeanService.createWorkflowBean()  </p>
+
+<pre><![CDATA[
+(...)
+@Controller( controllerJsp = "ManageBatchs.jsp", controllerPath = "jsp/admin/plugins/identityimport/", right = "IDENTITYIMPORT_BATCH_MANAGEMENT" )
+public class BatchJspBean extends AbstractManageItemsJspBean<Integer, WorkflowBean<Batch>>
+{
+  (...)
+    // Workflow
+    private static final String BATCH_WFBEANSERVICE = "identityimport.batchWFBean.wfbeanservice";
+    private WorkflowBeanService<Batch> _wfBeanService = SpringContextService.getBean( BATCH_WFBEANSERVICE );
+
+    // Session variable to store working values
+    private Batch _batch;
+    WorkflowBean<Batch> _wfBean;
+
+
+  (...)
+
+
+    @Override
+    List<WorkflowBean<Batch>> getItemsFromIds( List<Integer> listIds )
+    {
+        List<Batch> listBatch = BatchHome.getBatchsListByIds( listIds );
+
+        // keep original order
+        return listbatchWFBean.stream( ).sorted( Comparator.comparingInt( notif -> listIds.indexOf( notif.getId( ) ) ) )
+                .map( b -> _wfBeanService.createWorkflowBean( b, b.getId( ), getUser( ) ) )
+                .collect( Collectors.toList( ) );
+    }
+
+   (...)
+   
+   
+    @Action( ACTION_CREATE_BATCH )
+    public String doCreateBatch( HttpServletRequest request ) throws AccessDeniedException
+    {
+        populate( _batch, request, getLocale( ) );
+
+  (...)
+
+        BatchHome.create( _batch );
+        _wfBean = _wfBeanService.createWorkflowBean( _batch, _batchWFBean.getId( ), getUser( ) );
+
+        return redirectView( request, VIEW_MANAGE_BATCHS );
+    }
+
+  (...)
+ 
+    @View( VIEW_MODIFY_BATCH )
+    public String getModifyBatch( HttpServletRequest request )
+    {
+        int nId = Integer.parseInt( request.getParameter( PARAMETER_ID_BATCH ) );
+
+        if ( _batch == null || ( _batchWFBean.getId( ) != nId ) )
+        {
+            Optional<Batch> optBatch = BatchHome.findByPrimaryKey( nId );
+            _batch = optbatchWFBean.orElseThrow( ( ) -> new AppException( ERROR_RESOURCE_NOT_FOUND ) );
+
+            _wfBean = _wfBeanService.createWorkflowBean( _batch, _batchWFBean.getId( ), getUser( ) );
+        }
+
+        _wfBeanService.addHistory(_wfBean, request, getLocale( ) );
+        
+        Map<String, Object> model = getModel( );
+        model.put( MARK_BATCH, _wfBean );
+        model.put( SecurityTokenService.MARK_TOKEN, SecurityTokenService.getInstance( ).getToken( request, ACTION_MODIFY_BATCH ) );
+
+        return getPage( PROPERTY_PAGE_TITLE_MODIFY_BATCH, TEMPLATE_MODIFY_BATCH, model );
+    }
+
+  (...)
+
+    /**
+     * process a workflow action
+     *
+     * @param request
+     *            The Http request
+     * @return the jsp URL to display the form to manage batchs
+     */
+    @Action( ACTION_PROCESS_WORKFLOW_ACTION )
+    public String doProcessAction( HttpServletRequest request )
+    {
+        int nId = Integer.parseInt( request.getParameter( PARAMETER_ID_BATCH ) );
+        int nAction = Integer.parseInt( request.getParameter( PARAMETER_ID_ACTION ) );
+
+        if ( _batch == null || ( _batchWFBean.getId( ) != nId ) )
+        {
+            Optional<Batch> optBatch = BatchHome.findByPrimaryKey( nId );
+            _batch = optbatchWFBean.orElseThrow( ( ) -> new AppException( ERROR_RESOURCE_NOT_FOUND ) );
+
+            _wfBean = _wfBeanService.createWorkflowBean( _batch, _batchWFBean.getId( ), getUser( ) );
+        }
+
+        String strFeedToken = _wfBeanService.processAction(_wfBean, nAction, request, getLocale( ) );        
+        
+        if ( strFeedToken != null )
+        {
+            
+            Map<String, Object> model = getModel( );
+            model.put( MARK_FEED_TOKEN, strFeedToken );
+            
+            return getPage( PROPERTY_PAGE_TITLE_PROCESS_BATCH, TEMPLATE_PROCESS_BATCH, model );
+        }
+        else
+        {
+            return redirect( request, VIEW_MODIFY_BATCH, PARAMETER_ID_BATCH, nId );
+        }
+    }
+}
+]]></pre>
+
+			 </subsection>
+			
 		</section>
 	</body>
 </document>
