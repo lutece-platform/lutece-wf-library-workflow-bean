@@ -38,13 +38,13 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
-import javax.servlet.http.HttpServletRequest;
-
 import fr.paris.lutece.api.user.User;
 import fr.paris.lutece.portal.service.template.AppTemplateService;
 import fr.paris.lutece.portal.service.util.AppException;
 import fr.paris.lutece.portal.service.workflow.WorkflowService;
 import fr.paris.lutece.util.html.HtmlTemplate;
+import jakarta.enterprise.inject.spi.CDI;
+import jakarta.servlet.http.HttpServletRequest;
 
 public class WorkflowBeanService<T> implements Serializable
 {
@@ -70,10 +70,11 @@ public class WorkflowBeanService<T> implements Serializable
     // instance variables
     private int _nWorkflowKey;
     private String _strResourceType;
+    private transient WorkflowService _workflowService;
 
     /**
      * constructor
-     * 
+     *
      * @param strResourceType
      * @param nWorkflowKey
      */
@@ -81,6 +82,21 @@ public class WorkflowBeanService<T> implements Serializable
     {
         this._strResourceType = strResourceType;
         this._nWorkflowKey = nWorkflowKey;
+    }
+
+    /**
+     * Returns the workflow service, looked up from the CDI container on first use and cached afterwards.
+     *
+     * @return the workflow service
+     */
+    private WorkflowService getWorkflowService( )
+    {
+        if ( _workflowService == null )
+        {
+            _workflowService = CDI.current( ).select( WorkflowService.class ).get( );
+        }
+
+        return _workflowService;
     }
 
     /**
@@ -142,10 +158,10 @@ public class WorkflowBeanService<T> implements Serializable
     public WorkflowBean<T> refresh( WorkflowBean<T> wfBean )
     {
         // set (or initialize) state
-        wfBean.setState( WorkflowService.getInstance( ).getState( wfBean.getResourceId( ), _strResourceType, _nWorkflowKey, wfBean.getExternalParentId( ) ) );
+        wfBean.setState( getWorkflowService( ).getState( wfBean.getResourceId( ), _strResourceType, _nWorkflowKey, wfBean.getExternalParentId( ) ) );
 
         // set available actions
-        wfBean.setActions( WorkflowService.getInstance( ).getActions( wfBean.getResourceId( ), _strResourceType, _nWorkflowKey, wfBean.getUser( ) ) );
+        wfBean.setActions( getWorkflowService( ).getActions( wfBean.getResourceId( ), _strResourceType, _nWorkflowKey, wfBean.getUser( ) ) );
 
         return wfBean;
     }
@@ -161,7 +177,7 @@ public class WorkflowBeanService<T> implements Serializable
      */
     public void processAction( WorkflowBean<T> wfBean, int nAction, HttpServletRequest request, Locale locale )
     {
-        WorkflowService.getInstance( ).doProcessAction( wfBean.getResourceId( ), _strResourceType, nAction, wfBean.getExternalParentId( ), request, locale,
+        getWorkflowService( ).doProcessAction( wfBean.getResourceId( ), _strResourceType, nAction, wfBean.getExternalParentId( ), request, locale,
                 false, wfBean.getUser( ) );
 
         refresh( wfBean );
@@ -178,7 +194,7 @@ public class WorkflowBeanService<T> implements Serializable
      */
     public void processActionNoUser( WorkflowBean<T> wfBean, int nAction, HttpServletRequest request, Locale locale )
     {
-        WorkflowService.getInstance( ).doProcessAction( wfBean.getResourceId( ), _strResourceType, nAction, wfBean.getExternalParentId( ), request, locale,
+        getWorkflowService( ).doProcessAction( wfBean.getResourceId( ), _strResourceType, nAction, wfBean.getExternalParentId( ), request, locale,
                 true, wfBean.getUser( ) );
 
         refresh( wfBean );
@@ -196,10 +212,10 @@ public class WorkflowBeanService<T> implements Serializable
      */
     public String getTaskForm( WorkflowBean<T> wfBean, int nAction, HttpServletRequest request, Locale locale, String strTargetJsp, String strWorkflowAction )
     {
-        if ( WorkflowService.getInstance( ).isDisplayTasksForm( nAction, locale ) )
+        if ( getWorkflowService( ).isDisplayTasksForm( nAction, locale ) )
         {
             // A task Form exists and should be displayed
-            String strHtmlTasksForm = WorkflowService.getInstance( ).getDisplayTasksForm( wfBean.getResourceId( ), wfBean.getResourceType( ), nAction, request,
+            String strHtmlTasksForm = getWorkflowService( ).getDisplayTasksForm( wfBean.getResourceId( ), wfBean.getResourceType( ), nAction, request,
                     locale, wfBean.getUser( ) );
 
             Map<String, Object> model = new HashMap<>( );
@@ -234,7 +250,7 @@ public class WorkflowBeanService<T> implements Serializable
         if ( request.getParameter( PARAMETER_SUBMITTED_TASK_FORM ) != null )
         {
             // Submit the task Form and process the action
-            String errorMsgUrl = WorkflowService.getInstance( ).doSaveTasksForm( wfBean.getResourceId( ), wfBean.getResourceType( ), nAction,
+            String errorMsgUrl = getWorkflowService( ).doSaveTasksForm( wfBean.getResourceId( ), wfBean.getResourceType( ), nAction,
                     wfBean.getExternalParentId( ), request, locale, wfBean.getUser( ) );
             refresh( wfBean );
 
@@ -255,7 +271,7 @@ public class WorkflowBeanService<T> implements Serializable
      */
     public boolean existsTaskForm( int nAction, Locale locale )
     {
-        return WorkflowService.getInstance( ).isDisplayTasksForm( nAction, locale );
+        return getWorkflowService( ).isDisplayTasksForm( nAction, locale );
     }
 
     /**
@@ -269,7 +285,7 @@ public class WorkflowBeanService<T> implements Serializable
      */
     public void processAutomaticAction( WorkflowBean<T> wfBean, int nAction, HttpServletRequest request, Locale locale )
     {
-        WorkflowService.getInstance( ).doProcessAction( wfBean.getResourceId( ), _strResourceType, nAction, wfBean.getExternalParentId( ), request, locale,
+        getWorkflowService( ).doProcessAction( wfBean.getResourceId( ), _strResourceType, nAction, wfBean.getExternalParentId( ), request, locale,
                 true, null );
 
         refresh( wfBean );
@@ -283,7 +299,7 @@ public class WorkflowBeanService<T> implements Serializable
      */
     public void addHistory( WorkflowBean<T> wfBean, HttpServletRequest request, Locale locale )
     {
-        wfBean.setHistory( WorkflowService.getInstance( ).getDisplayDocumentHistory( wfBean.getResourceId( ), _strResourceType, _nWorkflowKey, request, locale,
+        wfBean.setHistory( getWorkflowService( ).getDisplayDocumentHistory( wfBean.getResourceId( ), _strResourceType, _nWorkflowKey, request, locale,
                 wfBean.getUser( ) ) );
     }
 
