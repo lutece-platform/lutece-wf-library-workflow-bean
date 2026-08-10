@@ -61,13 +61,17 @@ JSPBean integration : the workflowBean can be created with _wfBeanService.create
 ```
 
 (...)
-@Controller( controllerJsp = "ManageBatchs.jsp", controllerPath = "jsp/admin/plugins/identityimport/", right = "IDENTITYIMPORT_BATCH_MANAGEMENT" )
+@Controller( controllerJsp = "ManageBatchs.jsp", controllerPath = "jsp/admin/plugins/identityimport/", right = "IDENTITYIMPORT_BATCH_MANAGEMENT", securityTokenEnabled = true )
 public class BatchJspBean extends AbstractManageItemsJspBean<Integer, WorkflowBean<Batch>>
 {
   (...)
     // Workflow
-    private static final String BATCH_WFBEANSERVICE = "identityimport.batchWFBean.wfbeanservice";
-    private WorkflowBeanService<Batch> _wfBeanService = SpringContextService.getBean( BATCH_WFBEANSERVICE );
+    private static final String BATCH_RESOURCE_TYPE = Batch.RESOURCE_TYPE;
+    private static final int BATCH_WORKFLOW_KEY = 100;
+    private WorkflowBeanService<Batch> _wfBeanService = new WorkflowBeanService<>( BATCH_RESOURCE_TYPE, BATCH_WORKFLOW_KEY );
+
+    @Inject
+    private Models _models;
 
     // Session variable to store working values
     private Batch _batch;
@@ -121,11 +125,9 @@ public class BatchJspBean extends AbstractManageItemsJspBean<Integer, WorkflowBe
 
         _wfBeanService.addHistory(_wfBean, request, getLocale( ) );
         
-        Map<String, Object> model = getModel( );
-        model.put( MARK_BATCH, _wfBean );
-        model.put( SecurityTokenService.MARK_TOKEN, SecurityTokenService.getInstance( ).getToken( request, ACTION_MODIFY_BATCH ) );
+        _models.put( MARK_BATCH, _wfBean );
 
-        return getPage( PROPERTY_PAGE_TITLE_MODIFY_BATCH, TEMPLATE_MODIFY_BATCH, model );
+        return getPage( PROPERTY_PAGE_TITLE_MODIFY_BATCH, TEMPLATE_MODIFY_BATCH );
     }
 
   (...)
@@ -156,10 +158,9 @@ public class BatchJspBean extends AbstractManageItemsJspBean<Integer, WorkflowBe
         if ( strFeedToken != null )
         {
             
-            Map<String, Object> model = getModel( );
-            model.put( MARK_FEED_TOKEN, strFeedToken );
-            
-            return getPage( PROPERTY_PAGE_TITLE_PROCESS_BATCH, TEMPLATE_PROCESS_BATCH, model );
+            _models.put( MARK_FEED_TOKEN, strFeedToken );
+
+            return getPage( PROPERTY_PAGE_TITLE_PROCESS_BATCH, TEMPLATE_PROCESS_BATCH );
         }
         else
         {
